@@ -1,0 +1,13 @@
+{
+  "name": "exam-question-cli",
+  "private": true,
+  "description": "CLI tool for extracting exam questions from academic papers",
+  "scripts": {
+    "setup": "pip install -r requirements.txt",
+    "test": "python -m pytest tests/ -v",
+    "demo": "python ag.py --help"
+  },
+  "keywords": ["cli", "exam", "questions", "extraction", "pdf", "academic"],
+  "author": "Your Name",
+  "license": "MIT"
+}

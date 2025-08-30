@@ -7,8 +7,9 @@ import re
 import json
 from pathlib import Path
 from typing import List, Optional
-import openai
+import ollama
 import os
+import time
 from .utils import print_info, print_success, print_error, print_progress
 
 
@@ -16,17 +17,30 @@ class QuestionExtractor:
     """Extracts questions from PDF files with topic filtering."""
     
     def __init__(self):
-        self.llm_client = None
+        self.ollama_client = None
+        self.model_name = "koesn/llama3-8b-instruct:latest"
         self._setup_llm()
     
     def _setup_llm(self):
-        """Setup LLM client if API key is available."""
-        api_key = os.getenv('OPENAI_API_KEY')
-        if api_key:
-            openai.api_key = api_key
-            self.llm_client = openai
-        else:
-            print_info("OpenAI API key not found. LLM features will be disabled.")
+        """Setup Ollama client and check if model is available."""
+        try:
+            # Test if Ollama is running and model is available
+            models = ollama.list()
+            available_models = [model['name'] for model in models['models']]
+            
+            if self.model_name in available_models:
+                self.ollama_client = ollama
+                print_info(f"Ollama model '{self.model_name}' is available")
+            else:
+                print_info(f"Ollama model '{self.model_name}' not found. Attempting to pull...")
+                ollama.pull(self.model_name)
+                self.ollama_client = ollama
+                print_success(f"Successfully pulled model '{self.model_name}'")
+                
+        except Exception as e:
+            print_error(f"Ollama not available: {str(e)}")
+            print_info("Make sure Ollama is installed and running: https://ollama.ai")
+            print_info("LLM features will be disabled.")
     
     def extract_questions(self, file_path: str, topic: str, use_llm: bool = False) -> List[str]:
         """
@@ -58,7 +72,7 @@ class QuestionExtractor:
         filtered_questions = self._filter_by_topic(questions, topic)
         
         # Enhance with LLM if requested and available
-        if use_llm and self.llm_client and filtered_questions:
+        if use_llm and self.ollama_client and filtered_questions:
             print_progress("Enhancing questions with LLM...")
             filtered_questions = self._enhance_with_llm(filtered_questions, topic)
         
@@ -157,8 +171,8 @@ class QuestionExtractor:
         return filtered
     
     def _enhance_with_llm(self, questions: List[str], topic: str) -> List[str]:
-        """Use LLM to enhance and refine questions."""
-        if not self.llm_client:
+        """Use Ollama LLM to enhance and refine questions."""
+        if not self.ollama_client:
             print_info("LLM not available, skipping enhancement")
             return questions
         
@@ -167,29 +181,42 @@ class QuestionExtractor:
             
             for question in questions:
                 prompt = f"""
-                Analyze this exam question and determine if it's truly related to "{topic}". 
-                If it is related, clean it up and make it more clear. 
-                If it's not related, respond with "UNRELATED".
+Analyze this exam question and determine if it's truly related to "{topic}". 
+If it is related, clean it up and make it more clear and well-formatted. 
+If it's not related, respond with exactly "UNRELATED".
+
+Question: {question}
+
+Respond with either the cleaned question or exactly "UNRELATED"."""
                 
-                Question: {question}
+                try:
+                    response = self.ollama_client.chat(
+                        model=self.model_name,
+                        messages=[
+                            {
+                                'role': 'user',
+                                'content': prompt
+                            }
+                        ],
+                        options={
+                            'temperature': 0.1,
+                            'top_p': 0.9,
+                            'num_predict': 150
+                        }
+                    )
+                    
+                    result = response['message']['content'].strip()
+                    
+                    if result != "UNRELATED" and len(result) > 10:
+                        enhanced_questions.append(result)
+                    
+                    time.sleep(0.5)  # Rate limiting for local model
+                    
+                except Exception as e:
+                    print_error(f"Error processing question with LLM: {str(e)}")
+                    # Fall back to original question if LLM fails
+                    enhanced_questions.append(question)
                 
-                Respond with either the cleaned question or "UNRELATED":
-                """
-                
-                response = self.llm_client.ChatCompletion.create(
-                    model="gpt-3.5-turbo",
-                    messages=[{"role": "user", "content": prompt}],
-                    max_tokens=150,
-                    temperature=0.1
-                )
-                
-                result = response.choices[0].message.content.strip()
-                
-                if result != "UNRELATED" and len(result) > 10:
-                    enhanced_questions.append(result)
-                
-                time.sleep(0.5)  # Rate limiting
-            
             print_success(f"LLM enhanced {len(enhanced_questions)} out of {len(questions)} questions")
             return enhanced_questions
             

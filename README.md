@@ -10,6 +10,7 @@ A powerful command-line tool for scraping exam papers and extracting questions b
 - **Pipeline Mode**: Complete workflow from scraping to extraction
 - **Structured Output**: Save results as organized JSON files
 - **Progress Tracking**: Real-time feedback on operations
+- **Local LLM**: Uses Ollama with Llama3-8B for question enhancement
 - **Caching**: Avoid duplicate downloads
 
 ## Installation
@@ -19,9 +20,14 @@ A powerful command-line tool for scraping exam papers and extracting questions b
 pip install -r requirements.txt
 ```
 
-2. (Optional) Set up OpenAI API key for LLM features:
+2. (Optional) Set up Ollama for LLM features:
 ```bash
-export OPENAI_API_KEY="your-api-key-here"
+# Install Ollama (visit https://ollama.ai for installation instructions)
+# Pull the required model
+ollama pull koesn/llama3-8b-instruct:latest
+
+# Start Ollama service (if not already running)
+ollama serve
 ```
 
 ## Usage
@@ -108,4 +114,5 @@ Questions are saved in JSON format:
 
 - Python 3.7+
 - Internet connection for scraping
-- OpenAI API key (optional, for LLM features)
+- Ollama installed locally (optional, for LLM features)
+- koesn/llama3-8b-instruct:latest model (for LLM enhancement)
